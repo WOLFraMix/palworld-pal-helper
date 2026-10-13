@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/db"
@@ -22,5 +23,6 @@ func Run(store *db.Store, addr string) error {
 		}
 		json.NewEncoder(w).Encode(pals[0])
 	})
+	log.Printf("API слушает http://%s/api/pal?name=<имя пала>", addr)
 	return http.ListenAndServe(addr, nil)
 }

@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"strings"
 
 	_ "modernc.org/sqlite" // драйвер SQLite без CGO
 )
@@ -26,8 +27,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	// SQLite любит один писатель за раз
-	sq.SetMaxOpenConns(1)
+	sq.SetMaxOpenConns(1) // SQLite любит одного писателя
 	s := &Store{DB: sq}
 	return s, s.init()
 }
@@ -51,11 +51,14 @@ CREATE INDEX IF NOT EXISTS idx_name_en ON pals(name_en);
 }
 
 func (s *Store) Upsert(p Pal) error {
+	if strings.TrimSpace(p.NameRu) == "" {
+		return nil // без имени пала не опознаешь — пропускаем
+	}
 	_, err := s.DB.Exec(`
 INSERT INTO pals (paldex_no, name_ru, name_en, element, skill_name_ru, skill_type_ru, description_ru)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (name_ru) DO UPDATE SET
-	paldex_no      = excluded.paldex_no,
+	paldex_no      = CASE WHEN excluded.paldex_no != '' THEN excluded.paldex_no ELSE pals.paldex_no END,
 	name_en        = CASE WHEN excluded.name_en != '' THEN excluded.name_en ELSE pals.name_en END,
 	element        = CASE WHEN excluded.element != '' THEN excluded.element ELSE pals.element END,
 	skill_name_ru  = CASE WHEN excluded.skill_name_ru != '' THEN excluded.skill_name_ru ELSE pals.skill_name_ru END,
@@ -67,16 +70,22 @@ ON CONFLICT (name_ru) DO UPDATE SET
 }
 
 func (s *Store) Search(q string) ([]Pal, error) {
+	q = strings.ToLower(strings.TrimSpace(q))
+	if q == "" {
+		return nil, nil
+	}
+	// LIKE в SQLite не понимает русский регистр, поэтому
+	// отбираем кандидатов SQL-ом, а фильтруем в Go
 	rows, err := s.DB.Query(`
 SELECT id, COALESCE(paldex_no,''), name_ru, COALESCE(name_en,''), COALESCE(element,''),
        COALESCE(skill_name_ru,''), COALESCE(skill_type_ru,''), COALESCE(description_ru,'')
 FROM pals
-WHERE name_ru LIKE ? OR name_en LIKE ?
-ORDER BY paldex_no`, "%"+q+"%", "%"+q+"%")
+ORDER BY paldex_no`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var out []Pal
 	for rows.Next() {
 		var p Pal
@@ -84,7 +93,10 @@ ORDER BY paldex_no`, "%"+q+"%", "%"+q+"%")
 			&p.SkillNameRu, &p.SkillTypeRu, &p.DescriptionRu); err != nil {
 			return nil, err
 		}
-		out = append(out, p)
+		if strings.Contains(strings.ToLower(p.NameRu), q) ||
+			strings.Contains(strings.ToLower(p.NameEn), q) {
+			out = append(out, p)
+		}
 	}
 	return out, rows.Err()
 }
