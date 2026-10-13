@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/api"
+	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/bridge"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/db"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/importer"
 )
@@ -14,7 +15,7 @@ const dbPath = "data/palworld.db"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("использование: palctl import | search <имя> | serve")
+		fmt.Println("использование: palctl import | search <имя> | serve | bridge <путь к папке мода>")
 		os.Exit(1)
 	}
 	store, err := db.Open(dbPath)
@@ -45,8 +46,9 @@ func main() {
 			return
 		}
 		for _, p := range pals {
-			fmt.Printf("[%s] %s / %s\n  Навык: %s\n  %s\n",
-				p.PalDexNo, p.NameRu, p.NameEn, p.SkillNameRu, p.DescriptionRu)
+			fmt.Println(palLine(p))
+			fmt.Println("  Навык:", p.SkillNameRu)
+			fmt.Println("  ", p.DescriptionRu)
 		}
 
 	case "serve":
@@ -54,7 +56,29 @@ func main() {
 			log.Fatal(err)
 		}
 
+	case "bridge":
+		if len(os.Args) < 3 {
+			fmt.Println("укажи путь к папке мода:")
+			fmt.Println(`  palctl bridge "C:\Games\Palworld\Pal\Binaries\Win64\ue4ss\Mods\PalHelper\bridge"`)
+			os.Exit(1)
+		}
+		if err := bridge.Run(store, os.Args[2]); err != nil {
+			log.Fatal(err)
+		}
+
 	default:
 		fmt.Println("неизвестная команда")
 	}
+}
+
+func palLine(p db.Pal) string {
+	s := ""
+	if p.PalDexNo != "" {
+		s = "[" + p.PalDexNo + "] "
+	}
+	s += p.NameRu
+	if p.NameEn != "" {
+		s += " / " + p.NameEn
+	}
+	return s
 }
