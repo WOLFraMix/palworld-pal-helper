@@ -3,7 +3,7 @@ package db
 import (
 	"database/sql"
 
-	_ "modernc.org/sqlite" // драйвер SQLite
+	_ "modernc.org/sqlite" // драйвер SQLite без CGO
 )
 
 type Pal struct {
@@ -35,17 +35,16 @@ func Open(path string) (*Store, error) {
 func (s *Store) init() error {
 	_, err := s.DB.Exec(`
 CREATE TABLE IF NOT EXISTS pals (
-	id              INTEGER PRIMARY KEY AUTOINCREMENT,
-	paldex_no       TEXT,
-	name_ru         TEXT NOT NULL,
-	name_en         TEXT NOT NULL,
-	element         TEXT,
-	skill_name_ru   TEXT,
-	skill_type_ru   TEXT,
-	description_ru  TEXT,
-	UNIQUE (name_en)
+	id             INTEGER PRIMARY KEY AUTOINCREMENT,
+	paldex_no      TEXT,
+	name_ru        TEXT NOT NULL,
+	name_en        TEXT,
+	element        TEXT,
+	skill_name_ru  TEXT,
+	skill_type_ru  TEXT,
+	description_ru TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_name_ru ON pals(name_ru);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_name_ru ON pals(name_ru);
 CREATE INDEX IF NOT EXISTS idx_name_en ON pals(name_en);
 `)
 	return err
@@ -55,13 +54,13 @@ func (s *Store) Upsert(p Pal) error {
 	_, err := s.DB.Exec(`
 INSERT INTO pals (paldex_no, name_ru, name_en, element, skill_name_ru, skill_type_ru, description_ru)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (name_en) DO UPDATE SET
+ON CONFLICT (name_ru) DO UPDATE SET
 	paldex_no      = excluded.paldex_no,
-	name_ru        = excluded.name_ru,
-	element        = excluded.element,
-	skill_name_ru  = excluded.skill_name_ru,
-	skill_type_ru  = excluded.skill_type_ru,
-	description_ru = excluded.description_ru`,
+	name_en        = CASE WHEN excluded.name_en != '' THEN excluded.name_en ELSE pals.name_en END,
+	element        = CASE WHEN excluded.element != '' THEN excluded.element ELSE pals.element END,
+	skill_name_ru  = CASE WHEN excluded.skill_name_ru != '' THEN excluded.skill_name_ru ELSE pals.skill_name_ru END,
+	skill_type_ru  = CASE WHEN excluded.skill_type_ru != '' THEN excluded.skill_type_ru ELSE pals.skill_type_ru END,
+	description_ru = CASE WHEN excluded.description_ru != '' THEN excluded.description_ru ELSE pals.description_ru END`,
 		p.PalDexNo, p.NameRu, p.NameEn, p.Element,
 		p.SkillNameRu, p.SkillTypeRu, p.DescriptionRu)
 	return err
@@ -69,7 +68,8 @@ ON CONFLICT (name_en) DO UPDATE SET
 
 func (s *Store) Search(q string) ([]Pal, error) {
 	rows, err := s.DB.Query(`
-SELECT id, paldex_no, name_ru, name_en, element, skill_name_ru, skill_type_ru, description_ru
+SELECT id, COALESCE(paldex_no,''), name_ru, COALESCE(name_en,''), COALESCE(element,''),
+       COALESCE(skill_name_ru,''), COALESCE(skill_type_ru,''), COALESCE(description_ru,'')
 FROM pals
 WHERE name_ru LIKE ? OR name_en LIKE ?
 ORDER BY paldex_no`, "%"+q+"%", "%"+q+"%")
