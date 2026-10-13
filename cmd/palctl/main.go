@@ -80,5 +80,8 @@ func palLine(p db.Pal) string {
 	if p.NameEn != "" {
 		s += " / " + p.NameEn
 	}
+	if p.Element != "" {
+		s += " (" + p.Element + ")"
+	}
 	return s
 }

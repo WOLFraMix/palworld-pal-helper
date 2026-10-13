@@ -15,7 +15,7 @@ var (
 	reSingleFile = regexp.MustCompile(`^\d+_`)
 	reAdjacency  = regexp.MustCompile(`name\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*partnerSkill\s*:\s*\{`)
 	reSkillKey   = regexp.MustCompile(`partnerSkill\s*:\s*\{`)
-	reNumField   = regexp.MustCompile(`(?:^|[^A-Za-z_])(?:number|palNo|paldeckNo|no)\s*:\s*"?(\d{1,3})"?`)
+	reIndexField = regexp.MustCompile(`(?:^|[^A-Za-z_])index\s*:\s*"?(\d{1,3})"?`)
 	reTypesField = regexp.MustCompile(`(?:^|[^A-Za-z_])(?:types|elements|elementType)\s*:\s*
 $$
 ([^
@@ -175,13 +175,15 @@ func ParseBundle(path string) ([]db.Pal, error) {
 		} else if v, ok := lastStringField(before, "name"); ok {
 			p.NameRu = v
 		}
-		if p.NameRu == "" {
-			continue // без имени не опознаём
+		if v, ok := lastStringField(before, "key"); ok {
+			p.NameEn = v
 		}
-		if v, ok := firstNumberField(before, after); ok {
+		if v, ok := lastNumberField(before); ok {
 			p.PalDexNo = v
+		} else if m := reIndexField.FindStringSubmatch(after); m != nil {
+			p.PalDexNo = m[1]
 		}
-		if v := firstTypesField(before, after); v != "" {
+		if v := lastTypesField(before, after); v != "" {
 			p.Element = v
 		}
 		pals = append(pals, p)
@@ -246,27 +248,29 @@ func lastStringField(src, key string) (string, bool) {
 	return unescape(ms[len(ms)-1][1]), true
 }
 
-func firstNumberField(before, after string) (string, bool) {
-	if m := reNumField.FindStringSubmatch(before); m != nil {
-		return m[1], true
+func lastNumberField(before string) (string, bool) {
+	ms := reIndexField.FindAllStringSubmatch(before, -1)
+	if len(ms) == 0 {
+		return "", false
 	}
-	if m := reNumField.FindStringSubmatch(after); m != nil {
-		return m[1], true
-	}
-	return "", false
+	return ms[len(ms)-1][1], true
 }
 
-func firstTypesField(before, after string) string {
-	m := reTypesField.FindStringSubmatch(before)
-	if m == nil {
-		m = reTypesField.FindStringSubmatch(after)
-		if m == nil {
-			return ""
-		}
+func lastTypesField(before, after string) string {
+	ms := reTypesField.FindAllStringSubmatch(before, -1)
+	if len(ms) > 0 {
+		return joinQuoted(ms[len(ms)-1][2])
 	}
+	if m := reTypesField.FindStringSubmatch(after); m != nil {
+		return joinQuoted(m[2])
+	}
+	return ""
+}
+
+func joinQuoted(s string) string {
 	var parts []string
-	for _, s := range reQuoted.FindAllStringSubmatch(m[2], -1) {
-		parts = append(parts, s[1])
+	for _, q := range reQuoted.FindAllStringSubmatch(s, -1) {
+		parts = append(parts, q[1])
 	}
 	return strings.Join(parts, ", ")
 }
