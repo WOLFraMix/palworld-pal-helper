@@ -141,14 +141,14 @@ func Run(search func(string) string) error {
 	procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 
 	h, _, _ := procCreateWindowExW.Call(
-		WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,
+		WS_EX_TOPMOST|WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_LAYERED,
 		uintptr(unsafe.Pointer(cn)), uintptr(unsafe.Pointer(cn)),
 		WS_POPUP, 100, 100, winW, winH, 0, 0, hInst, 0)
 	if h == 0 {
 		return errors.New("CreateWindowExW не сработал")
 	}
 	// полупрозрачность панели: 235 из 255 — чуть просвечивает фон
-	procSetLayeredWindowAttributes.Call(h, 0, 235, LWA_ALPHA)
+	procSetLayeredWindowAttributes.Call(h, 0, 200, LWA_ALPHA)
 
 	procRegisterHotKey.Call(h, 1, MOD_CONTROL|MOD_ALT, VK_Q)
 

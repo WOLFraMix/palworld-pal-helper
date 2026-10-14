@@ -78,6 +78,16 @@ func main() {
 			if err != nil || len(found) == 0 {
 				return "Пал не найден: " + q
 			}
+			// точное совпадение имени — всегда первым
+			nq := normalizeName(q)
+			for i, p := range found {
+				if normalizeName(p.NameRu) == nq || normalizeName(p.NameEn) == nq {
+					if i > 0 {
+						found[0], found[i] = found[i], found[0]
+					}
+					break
+				}
+			}
 			var b strings.Builder
 			for i, p := range found {
 				if i == 2 {
@@ -161,4 +171,10 @@ func palLine(p db.Pal) string {
 		s += " (" + elementRuStr(p.Element) + ")"
 	}
 	return s
+}
+
+func normalizeName(s string) string {
+	s = strings.ToLower(s)
+	s = strings.NewReplacer("-", " ", "_", " ").Replace(s)
+	return strings.Join(strings.Fields(s), " ")
 }
