@@ -2,45 +2,52 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
-	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/api"
-	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/bridge"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/db"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/importer"
+	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/overlay"
 )
 
 const dbPath = "data/palworld.db"
+const dataDir = "data"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("использование: palctl import | search <имя> | serve | bridge <путь к папке мода>")
-		os.Exit(1)
+		usage()
+		return
 	}
-	store, err := db.Open(dbPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer store.DB.Close()
 
 	switch os.Args[1] {
 	case "import":
-		n, err := importer.ImportDir(store, "data/raw")
+		dir := dataDir
+		if len(os.Args) > 2 {
+			dir = os.Args[2]
+		}
+		store, err := db.Open(dbPath)
 		if err != nil {
-			log.Fatal(err)
+			fatal(err)
+		}
+		defer store.DB.Close()
+
+		n, err := importer.ImportDir(store, dir)
+		if err != nil {
+			fatal(err)
 		}
 		fmt.Printf("импорт готов: обработано файлов %d, палов в базе %d\n", n, store.Count())
 
 	case "search":
-		if len(os.Args) < 3 {
-			fmt.Println("укажи имя: palctl search ламболл")
-			os.Exit(1)
-		}
-		pals, err := store.Search(os.Args[2])
+		q := strings.Join(os.Args[2:], " ")
+		store, err := db.Open(dbPath)
 		if err != nil {
-			log.Fatal(err)
+			fatal(err)
+		}
+		defer store.DB.Close()
+
+		pals, err := store.Search(q)
+		if err != nil {
+			fatal(err)
 		}
 		if len(pals) == 0 {
 			fmt.Println("ничего не найдено")
@@ -48,43 +55,63 @@ func main() {
 		}
 		for _, p := range pals {
 			fmt.Println(palLine(p))
-			fmt.Println("  Навык:", p.SkillNameRu)
-			fmt.Println("  ", p.DescriptionRu)
+			if p.SkillNameRu != "" {
+				fmt.Println("  Навык: " + p.SkillNameRu)
+			}
+			if p.DescriptionRu != "" {
+				fmt.Println("   " + p.DescriptionRu)
+			}
 		}
 
-	case "serve":
-		if err := api.Run(store, "127.0.0.1:5277"); err != nil {
-			log.Fatal(err)
+	case "watch":
+		store, err := db.Open(dbPath)
+		if err != nil {
+			fatal(err)
 		}
+		defer store.DB.Close()
 
-	case "bridge":
-		if len(os.Args) < 3 {
-			fmt.Println("укажи путь к папке мода:")
-			fmt.Println(`  palctl bridge "C:\Games\Palworld\Pal\Binaries\Win64\ue4ss\Mods\PalHelper\bridge"`)
-			os.Exit(1)
-		}
-		if err := bridge.Run(store, os.Args[2]); err != nil {
-			log.Fatal(err)
+		fmt.Println("Оверлей запущен: Ctrl+Alt+Q — поиск по тексту из буфера обмена, клик по панели или 5 секунд — скрыть. Ctrl+C — выход.")
+		err = overlay.Run(func(q string) string {
+			q = strings.TrimSpace(q)
+			q = strings.TrimPrefix(q, "пал ")
+			found, err := store.Search(q)
+			if err != nil || len(found) == 0 {
+				return "Пал не найден: " + q
+			}
+			var b strings.Builder
+			for i, p := range found {
+				if i == 2 {
+					fmt.Fprintf(&b, "… ещё %d, уточни запрос", len(found)-2)
+					break
+				}
+				b.WriteString(palLine(p) + "\n")
+				if p.SkillNameRu != "" {
+					b.WriteString("  Навык: " + p.SkillNameRu + "\n")
+				}
+			}
+			return strings.TrimRight(b.String(), "\n")
+		})
+		if err != nil {
+			fmt.Println("ошибка оверлея:", err)
 		}
 
 	default:
-		fmt.Println("неизвестная команда")
+		usage()
 	}
 }
 
-func palLine(p db.Pal) string {
-	s := ""
-	if p.PalDexNo != "" {
-		s = "[" + p.PalDexNo + "] "
-	}
-	s += p.NameRu
-	if p.NameEn != "" {
-		s += " / " + p.NameEn
-	}
-	if p.Element != "" {
-		s += " (" + elementRuStr(p.Element) + ")"
-	}
-	return s
+func usage() {
+	fmt.Println(`pal-helper — помощник по Palworld
+
+Команды:
+  palctl import [папка]   — импорт данных в базу (по умолчанию data/)
+  palctl search <запрос>  — поиск пала по имени (рус. или англ.)
+  palctl watch            — оверлей: Ctrl+Alt+Q ищет по тексту из буфера`)
+}
+
+func fatal(err error) {
+	fmt.Println("ошибка:", err)
+	os.Exit(1)
 }
 
 var elementRu = map[string]string{
@@ -109,4 +136,19 @@ func elementRuStr(e string) string {
 		}
 	}
 	return strings.Join(out, ", ")
+}
+
+func palLine(p db.Pal) string {
+	s := ""
+	if p.PalDexNo != "" {
+		s = "[" + p.PalDexNo + "] "
+	}
+	s += p.NameRu
+	if p.NameEn != "" {
+		s += " / " + p.NameEn
+	}
+	if p.Element != "" {
+		s += " (" + elementRuStr(p.Element) + ")"
+	}
+	return s
 }
