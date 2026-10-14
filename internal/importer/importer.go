@@ -159,7 +159,15 @@ func ParseBundle(path string) ([]db.Pal, error) {
 		}
 		p.Element = lastTypesField(head)
 		if len(pals) < 3 {
-			fmt.Printf("DEBUG %s: element=%q head_len=%d\n", name, p.Element, len(head))
+			frag := ""
+			if i := strings.Index(head, "elements"); i >= 0 {
+				end := i + 40
+				if end > len(head) {
+					end = len(head)
+				}
+				frag = head[i:end]
+			}
+			fmt.Printf("DEBUG %s: element=%q frag=%q\n", name, p.Element, frag)
 		}
 
 		pals = append(pals, p)
@@ -236,11 +244,24 @@ func lastNumberField(head string) (string, bool) {
 }
 
 func lastTypesField(head string) string {
-	ms := reTypesField.FindAllStringSubmatch(head, -1)
-	if len(ms) == 0 {
-		return ""
+	for _, key := range []string{"elements", "types"} {
+		i := strings.LastIndex(head, key)
+		if i < 0 {
+			continue
+		}
+		rest := head[i+len(key):]
+		rest = strings.TrimLeft(rest, " \t\r\n:")
+		if strings.HasPrefix(rest, "[") {
+			rest = rest[1:]
+			if j := strings.IndexByte(rest, ']'); j >= 0 {
+				return joinQuoted(rest[:j])
+			}
+		}
 	}
-	return joinQuoted(ms[len(ms)-1][1])
+	if v, ok := lastStringField(head, "element"); ok {
+		return v
+	}
+	return ""
 }
 
 func joinQuoted(s string) string {
