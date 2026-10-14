@@ -159,10 +159,6 @@ func ParseBundle(path string) ([]db.Pal, error) {
 		p := db.Pal{NameRu: name}
 
 		p.SkillNameRu = fieldInBlock(skillBlock, "name")
-		if p.SkillNameRu == "" {
-			fmt.Printf("DEBUG skip (нет навыка): %s, skillBlock_len=%d\n", name, len(skillBlock))
-			continue
-		}
 		p.DescriptionRu = fieldInBlock(skillBlock, "desc")
 
 		if v, ok := lastStringField(head, "key"); ok {
@@ -174,10 +170,6 @@ func ParseBundle(path string) ([]db.Pal, error) {
 		p.Element = lastTypesField(head)
 
 		pals = append(pals, p)
-	}
-	fmt.Printf("DEBUG: объектов найдено %d, палов собрано %d\n", objCount, len(pals))
-	if len(pals) == 0 {
-		return nil, fmt.Errorf("не найдено ни одного объекта пала")
 	}
 	return pals, nil
 }
