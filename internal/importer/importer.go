@@ -158,17 +158,6 @@ func ParseBundle(path string) ([]db.Pal, error) {
 			p.PalDexNo = v
 		}
 		p.Element = lastTypesField(head)
-		if len(pals) < 3 {
-			frag := ""
-			if i := strings.Index(head, "elements"); i >= 0 {
-				end := i + 40
-				if end > len(head) {
-					end = len(head)
-				}
-				frag = head[i:end]
-			}
-			fmt.Printf("DEBUG %s: element=%q frag=%q\n", name, p.Element, frag)
-		}
 
 		pals = append(pals, p)
 	}
