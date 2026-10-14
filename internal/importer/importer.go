@@ -15,12 +15,7 @@ var (
 	reSkillKey   = regexp.MustCompile(`partnerSkill\s*:\s*\{`)
 	rePalObj     = regexp.MustCompile(`[A-Za-z_$][\w$]*=\{id:"((?:[^"\\]|\\.)*)"`)
 	reIndexField = regexp.MustCompile(`(?:^|[^A-Za-z_])index\s*:\s*"?(\d{1,3})"?`)
-	reTypesField = regexp.MustCompile(`(?:^|[^A-Za-z_])(?:types|elements)\s*:\s*
-$$
-([^
-$$
-]*)\]`)
-	reQuoted = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`)
+	reQuoted     = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`)
 )
 
 // ImportDir читает все файлы данных из папки dir и заполняет базу.
@@ -209,8 +204,8 @@ func extractBlock(src string, brace int) (block string, end int, ok bool) {
 			if j < 0 {
 				return "", i, false
 			}
-			i += j + 2
-			continue
+			i = i + 1 + j // встаём точно на закрывающий бэктик,
+			// i++ цикла перешагнёт через него сам
 		case '{':
 			depth++
 		case '}':
