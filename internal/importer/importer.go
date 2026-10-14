@@ -15,18 +15,17 @@ var (
 	reSingleFile = regexp.MustCompile(`^\d+_`)
 	reAdjacency  = regexp.MustCompile(`name\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*partnerSkill\s*:\s*\{`)
 	reSkillKey   = regexp.MustCompile(`partnerSkill\s*:\s*\{`)
+	rePalObj     = regexp.MustCompile(`[A-Za-z_$][\w$]*=\{id:"((?:[^"\\]|\\.)*)"`)
 	reIndexField = regexp.MustCompile(`(?:^|[^A-Za-z_])index\s*:\s*"?(\d{1,3})"?`)
 	reTypesField = regexp.MustCompile(`(?:^|[^A-Za-z_])(?:types|elements|elementType)\s*:\s*
 $$
 ([^
 $$
 ]*)\]`)
-	reQuoted = regexp.MustCompile(`"([^"]*)"`)
+	reQuoted = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"`)
 )
 
 // ImportDir читает все файлы данных из папки dir и заполняет базу.
-// Файлы вида "001_Ламболл.txt" — одиночные payload-ответы,
-// остальные (.js) — большой бандл со всеми палами.
 func ImportDir(store *db.Store, dir string) (int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -119,15 +118,15 @@ func ParseBundle(path string) ([]db.Pal, error) {
 	src := string(raw)
 
 	type entry struct {
-		start, end int // границы блока partnerSkill
+		start, end int
 		name       string
 	}
 	var entries []entry
 	taken := map[int]bool{}
 
-	// 1) надёжный случай: имя стоит прямо перед partnerSkill
+	// 1) редкий случай: имя стоит прямо перед partnerSkill
 	for _, m := range reAdjacency.FindAllStringSubmatchIndex(src, -1) {
-		brace := m[1] - 1 // позиция "{"
+		brace := m[1] - 1
 		_, end, ok := extractBlock(src, brace)
 		if !ok {
 			continue
@@ -135,7 +134,7 @@ func ParseBundle(path string) ([]db.Pal, error) {
 		entries = append(entries, entry{brace, end, unescape(src[m[2]:m[3]])})
 		taken[brace] = true
 	}
-	// 2) остальные блоки: имя ищем ближайшим "name:" перед блоком
+	// 2) все блоки partnerSkill
 	for _, loc := range reSkillKey.FindAllStringIndex(src, -1) {
 		brace := loc[1] - 1
 		if taken[brace] {
@@ -153,37 +152,46 @@ func ParseBundle(path string) ([]db.Pal, error) {
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].start < entries[j].start })
 
+	// начала объектов палов вида mr={id:"flowerprince",...
+	var objStarts []int
+	for _, o := range rePalObj.FindAllStringIndex(src, -1) {
+		objStarts = append(objStarts, o[0])
+	}
+
 	pals := make([]db.Pal, 0, len(entries))
 	for i, e := range entries {
-		p := db.Pal{}
-		p.SkillNameRu = fieldInBlock(src[e.start:e.end], "name")
-		p.DescriptionRu = fieldInBlock(src[e.start:e.end], "desc")
-
 		prevEnd := 0
 		if i > 0 {
 			prevEnd = entries[i-1].end
 		}
-		nextStart := len(src)
-		if i < len(entries)-1 {
-			nextStart = entries[i+1].start
-		}
+		// область полей текущего пала: строго от начала его объекта
+		// до начала блока навыка — чужие дропы и умения не мешают
 		before := src[prevEnd:e.start]
-		after := src[e.end:nextStart]
+		for _, o := range objStarts {
+			if o >= prevEnd && o < e.start {
+				before = src[o:e.start]
+			}
+		}
+
+		p := db.Pal{}
+		p.SkillNameRu = fieldInBlock(src[e.start:e.end], "name")
+		p.DescriptionRu = fieldInBlock(src[e.start:e.end], "desc")
 
 		if e.name != "" {
 			p.NameRu = e.name
 		} else if v, ok := lastStringField(before, "name"); ok {
 			p.NameRu = v
 		}
+		if p.NameRu == "" {
+			continue
+		}
 		if v, ok := lastStringField(before, "key"); ok {
 			p.NameEn = v
 		}
 		if v, ok := lastNumberField(before); ok {
 			p.PalDexNo = v
-		} else if m := reIndexField.FindStringSubmatch(after); m != nil {
-			p.PalDexNo = m[1]
 		}
-		if v := lastTypesField(before, after); v != "" {
+		if v := lastTypesField(before); v != "" {
 			p.Element = v
 		}
 		pals = append(pals, p)
@@ -204,16 +212,16 @@ func extractBlock(src string, brace int) (block string, end int, ok bool) {
 			i++
 			for i < len(src) && src[i] != '"' {
 				if src[i] == '\\' {
-					i++ // экранированный символ
+					i++
 				}
 				i++
 			}
 		case '`':
 			j := strings.IndexByte(src[i+1:], '`')
 			if j < 0 {
-				return "", i, false // незакрытый бэктик — файл обрезан
+				return "", i, false
 			}
-			i += j + 2 // перепрыгиваем всё содержимое
+			i += j + 2
 			continue
 		case '{':
 			depth++
@@ -256,15 +264,13 @@ func lastNumberField(before string) (string, bool) {
 	return ms[len(ms)-1][1], true
 }
 
-func lastTypesField(before, after string) string {
+func lastTypesField(before string) string {
 	ms := reTypesField.FindAllStringSubmatch(before, -1)
-	if len(ms) > 0 {
-		return joinQuoted(ms[len(ms)-1][2])
+	if len(ms) == 0 {
+		return ""
 	}
-	if m := reTypesField.FindStringSubmatch(after); m != nil {
-		return joinQuoted(m[2])
-	}
-	return ""
+	// единственная группа захвата — индекс 1 (раньше я ошибочно брала m[2])
+	return joinQuoted(ms[len(ms)-1][1])
 }
 
 func joinQuoted(s string) string {

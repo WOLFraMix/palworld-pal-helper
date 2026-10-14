@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/api"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/bridge"
@@ -81,7 +82,25 @@ func palLine(p db.Pal) string {
 		s += " / " + p.NameEn
 	}
 	if p.Element != "" {
-		s += " (" + p.Element + ")"
+		s += " (" + elementRuStr(p.Element) + ")"
 	}
 	return s
+}
+
+var elementRu = map[string]string{
+	"Normal": "нейтральный", "Fire": "огонь", "Water": "вода",
+	"Electric": "электричество", "Ice": "лёд", "Dragon": "дракон",
+	"Dark": "тьма", "Leaf": "трава", "Ground": "земля",
+}
+
+func elementRuStr(e string) string {
+	var out []string
+	for _, p := range strings.Split(e, ", ") {
+		if ru, ok := elementRu[strings.TrimSpace(p)]; ok {
+			out = append(out, ru)
+		} else {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, ", ")
 }
