@@ -84,9 +84,19 @@ func main() {
 					fmt.Fprintf(&b, "… ещё %d, уточни запрос", len(found)-2)
 					break
 				}
-				b.WriteString(palLine(p) + "\n")
+				b.WriteString(palLine(p))
+				b.WriteString("\n")
 				if p.SkillNameRu != "" {
-					b.WriteString("  Навык: " + p.SkillNameRu + "\n")
+					b.WriteString("  Навык: ")
+					b.WriteString(p.SkillNameRu)
+					b.WriteString("\n")
+				}
+				if i == 0 && p.DescriptionRu != "" {
+					b.WriteString("  ")
+					b.WriteString(p.DescriptionRu)
+				}
+				if i < len(found)-1 {
+					b.WriteString("\n")
 				}
 			}
 			return strings.TrimRight(b.String(), "\n")

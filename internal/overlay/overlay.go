@@ -20,27 +20,28 @@ var (
 	procGlobalUnlock     = kernel32.NewProc("GlobalUnlock")
 	procGlobalSize       = kernel32.NewProc("GlobalSize")
 
-	procRegisterClassExW = user32.NewProc("RegisterClassExW")
-	procCreateWindowExW  = user32.NewProc("CreateWindowExW")
-	procDefWindowProcW   = user32.NewProc("DefWindowProcW")
-	procShowWindow       = user32.NewProc("ShowWindow")
-	procGetMessageW      = user32.NewProc("GetMessageW")
-	procTranslateMessage = user32.NewProc("TranslateMessage")
-	procDispatchMessageW = user32.NewProc("DispatchMessageW")
-	procPostQuitMessage  = user32.NewProc("PostQuitMessage")
-	procRegisterHotKey   = user32.NewProc("RegisterHotKey")
-	procSetTimer         = user32.NewProc("SetTimer")
-	procKillTimer        = user32.NewProc("KillTimer")
-	procSetWindowPos     = user32.NewProc("SetWindowPos")
-	procGetSystemMetrics = user32.NewProc("GetSystemMetrics")
-	procInvalidateRect   = user32.NewProc("InvalidateRect")
-	procBeginPaint       = user32.NewProc("BeginPaint")
-	procEndPaint         = user32.NewProc("EndPaint")
-	procFillRect         = user32.NewProc("FillRect")
-	procDrawTextW        = user32.NewProc("DrawTextW")
-	procOpenClipboard    = user32.NewProc("OpenClipboard")
-	procCloseClipboard   = user32.NewProc("CloseClipboard")
-	procGetClipboardData = user32.NewProc("GetClipboardData")
+	procRegisterClassExW           = user32.NewProc("RegisterClassExW")
+	procCreateWindowExW            = user32.NewProc("CreateWindowExW")
+	procDefWindowProcW             = user32.NewProc("DefWindowProcW")
+	procShowWindow                 = user32.NewProc("ShowWindow")
+	procGetMessageW                = user32.NewProc("GetMessageW")
+	procTranslateMessage           = user32.NewProc("TranslateMessage")
+	procDispatchMessageW           = user32.NewProc("DispatchMessageW")
+	procPostQuitMessage            = user32.NewProc("PostQuitMessage")
+	procRegisterHotKey             = user32.NewProc("RegisterHotKey")
+	procSetTimer                   = user32.NewProc("SetTimer")
+	procKillTimer                  = user32.NewProc("KillTimer")
+	procSetWindowPos               = user32.NewProc("SetWindowPos")
+	procGetSystemMetrics           = user32.NewProc("GetSystemMetrics")
+	procInvalidateRect             = user32.NewProc("InvalidateRect")
+	procBeginPaint                 = user32.NewProc("BeginPaint")
+	procEndPaint                   = user32.NewProc("EndPaint")
+	procFillRect                   = user32.NewProc("FillRect")
+	procDrawTextW                  = user32.NewProc("DrawTextW")
+	procOpenClipboard              = user32.NewProc("OpenClipboard")
+	procCloseClipboard             = user32.NewProc("CloseClipboard")
+	procGetClipboardData           = user32.NewProc("GetClipboardData")
+	procSetLayeredWindowAttributes = user32.NewProc("SetLayeredWindowAttributes")
 
 	// GDI — рисование текста и примитивов
 	procCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
@@ -79,9 +80,11 @@ const (
 	TRANSPARENT_BKMODE = 1
 	DEFAULT_CHARSET    = 1
 	CLEARTYPE_QUALITY  = 5
+	WS_EX_LAYERED      = 0x00080000
+	LWA_ALPHA          = 0x00000002
 )
 
-const winW, winH, hideAfterMs = 560, 240, 5000
+const winW, winH, hideAfterMs = 640, 320, 5000
 
 type wndclassex struct {
 	CbSize, Style                            uint32
@@ -144,6 +147,8 @@ func Run(search func(string) string) error {
 	if h == 0 {
 		return errors.New("CreateWindowExW не сработал")
 	}
+	// полупрозрачность панели: 235 из 255 — чуть просвечивает фон
+	procSetLayeredWindowAttributes.Call(h, 0, 235, LWA_ALPHA)
 
 	procRegisterHotKey.Call(h, 1, MOD_CONTROL|MOD_ALT, VK_Q)
 
