@@ -117,21 +117,34 @@ func ParseBundle(path string) ([]db.Pal, error) {
 	}
 	src := string(raw)
 
+	objCount := 0
 	var pals []db.Pal
 	for _, m := range rePalObj.FindAllStringIndex(src, -1) {
+		objCount++
 		brace := m[0] + strings.Index(src[m[0]:m[1]], "{")
 		block, _, ok := extractBlock(src, brace)
 		if !ok {
+			fmt.Printf("DEBUG skip (обрыв объекта): id-строка=%q\n", src[m[0]:m[1]])
 			continue
 		}
 
 		loc := reSkillKey.FindStringIndex(block)
 		if loc == nil {
+			id := ""
+			if v, ok := lastStringField(block[:], "id"); ok {
+				id = v
+			}
+			fmt.Printf("DEBUG skip (нет partnerSkill): id=%q\n", id)
 			continue
 		}
 		skillBrace := loc[1] - 1
 		skillBlock, _, ok2 := extractBlock(block, skillBrace)
 		if !ok2 {
+			id := ""
+			if v, ok := lastStringField(block[:skillBrace], "id"); ok {
+				id = v
+			}
+			fmt.Printf("DEBUG skip (обрыв partnerSkill): id=%q\n", id)
 			continue
 		}
 		head := block[:skillBrace] // шапка пала до блока навыка
@@ -141,12 +154,18 @@ func ParseBundle(path string) ([]db.Pal, error) {
 			name = v
 		}
 		if name == "" {
+			id := ""
+			if v, ok := lastStringField(head, "id"); ok {
+				id = v
+			}
+			fmt.Printf("DEBUG skip (нет имени): id=%q\n", id)
 			continue
 		}
 		p := db.Pal{NameRu: name}
 
 		p.SkillNameRu = fieldInBlock(skillBlock, "name")
 		if p.SkillNameRu == "" {
+			fmt.Printf("DEBUG skip (нет навыка): %s, skillBlock_len=%d\n", name, len(skillBlock))
 			continue
 		}
 		p.DescriptionRu = fieldInBlock(skillBlock, "desc")
@@ -161,6 +180,7 @@ func ParseBundle(path string) ([]db.Pal, error) {
 
 		pals = append(pals, p)
 	}
+	fmt.Printf("DEBUG: объектов найдено %d, палов собрано %d\n", objCount, len(pals))
 	if len(pals) == 0 {
 		return nil, fmt.Errorf("не найдено ни одного объекта пала")
 	}
