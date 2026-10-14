@@ -70,6 +70,7 @@ ON CONFLICT (name_ru) DO UPDATE SET
 }
 
 func (s *Store) Search(q string) ([]Pal, error) {
+	q = strings.ReplaceAll(q, "-", " ")
 	q = strings.ToLower(strings.TrimSpace(q))
 	if q == "" {
 		return nil, nil

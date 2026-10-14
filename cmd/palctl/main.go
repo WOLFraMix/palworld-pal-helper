@@ -88,9 +88,15 @@ func palLine(p db.Pal) string {
 }
 
 var elementRu = map[string]string{
-	"Normal": "нейтральный", "Fire": "огонь", "Water": "вода",
-	"Electric": "электричество", "Ice": "лёд", "Dragon": "дракон",
-	"Dark": "тьма", "Leaf": "трава", "Ground": "земля",
+	"Normal":      "нейтральный",
+	"Fire":        "огонь",
+	"Water":       "вода",
+	"Electricity": "электричество",
+	"Ice":         "лёд",
+	"Dragon":      "дракон",
+	"Dark":        "тьма",
+	"Leaf":        "трава",
+	"Earth":       "земля",
 }
 
 func elementRuStr(e string) string {

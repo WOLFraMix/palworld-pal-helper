@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/db"
@@ -13,11 +12,10 @@ import (
 
 var (
 	reSingleFile = regexp.MustCompile(`^\d+_`)
-	reAdjacency  = regexp.MustCompile(`name\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*partnerSkill\s*:\s*\{`)
 	reSkillKey   = regexp.MustCompile(`partnerSkill\s*:\s*\{`)
 	rePalObj     = regexp.MustCompile(`[A-Za-z_$][\w$]*=\{id:"((?:[^"\\]|\\.)*)"`)
 	reIndexField = regexp.MustCompile(`(?:^|[^A-Za-z_])index\s*:\s*"?(\d{1,3})"?`)
-	reTypesField = regexp.MustCompile(`(?:^|[^A-Za-z_])(?:types|elements|elementType)\s*:\s*
+	reTypesField = regexp.MustCompile(`(?:^|[^A-Za-z_])(?:types|elements)\s*:\s*
 $$
 ([^
 $$
@@ -109,7 +107,9 @@ func ParsePayloadFile(path string) (db.Pal, error) {
 	return pal, nil
 }
 
-// ParseBundle разбирает большой JS-файл (типа CD0oDVDf.js), где лежат все палы.
+// ParseBundle разбирает минифицированный JS-бандл, где каждый пал
+// начинается как X={id:"...". Все поля пала берём строго из его
+// собственного объекта: до partnerSkill — шапка, внутри partnerSkill — навык.
 func ParseBundle(path string) ([]db.Pal, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -117,84 +117,52 @@ func ParseBundle(path string) ([]db.Pal, error) {
 	}
 	src := string(raw)
 
-	type entry struct {
-		start, end int
-		name       string
-	}
-	var entries []entry
-	taken := map[int]bool{}
-
-	// 1) редкий случай: имя стоит прямо перед partnerSkill
-	for _, m := range reAdjacency.FindAllStringSubmatchIndex(src, -1) {
-		brace := m[1] - 1
-		_, end, ok := extractBlock(src, brace)
+	var pals []db.Pal
+	for _, m := range rePalObj.FindAllStringIndex(src, -1) {
+		brace := m[0] + strings.Index(src[m[0]:m[1]], "{")
+		block, _, ok := extractBlock(src, brace)
 		if !ok {
 			continue
 		}
-		entries = append(entries, entry{brace, end, unescape(src[m[2]:m[3]])})
-		taken[brace] = true
-	}
-	// 2) все блоки partnerSkill
-	for _, loc := range reSkillKey.FindAllStringIndex(src, -1) {
-		brace := loc[1] - 1
-		if taken[brace] {
+
+		loc := reSkillKey.FindStringIndex(block)
+		if loc == nil {
 			continue
 		}
-		_, end, ok := extractBlock(src, brace)
-		if !ok {
+		skillBrace := loc[1] - 1
+		skillBlock, _, ok2 := extractBlock(block, skillBrace)
+		if !ok2 {
 			continue
 		}
-		entries = append(entries, entry{brace, end, ""})
-		taken[brace] = true
-	}
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("не найдено ни одного блока partnerSkill")
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].start < entries[j].start })
+		head := block[:skillBrace] // шапка пала до блока навыка
 
-	// начала объектов палов вида mr={id:"flowerprince",...
-	var objStarts []int
-	for _, o := range rePalObj.FindAllStringIndex(src, -1) {
-		objStarts = append(objStarts, o[0])
-	}
-
-	pals := make([]db.Pal, 0, len(entries))
-	for i, e := range entries {
-		prevEnd := 0
-		if i > 0 {
-			prevEnd = entries[i-1].end
+		name := ""
+		if v, ok := lastStringField(head, "name"); ok {
+			name = v
 		}
-		// область полей текущего пала: строго от начала его объекта
-		// до начала блока навыка — чужие дропы и умения не мешают
-		before := src[prevEnd:e.start]
-		for _, o := range objStarts {
-			if o >= prevEnd && o < e.start {
-				before = src[o:e.start]
-			}
-		}
-
-		p := db.Pal{}
-		p.SkillNameRu = fieldInBlock(src[e.start:e.end], "name")
-		p.DescriptionRu = fieldInBlock(src[e.start:e.end], "desc")
-
-		if e.name != "" {
-			p.NameRu = e.name
-		} else if v, ok := lastStringField(before, "name"); ok {
-			p.NameRu = v
-		}
-		if p.NameRu == "" {
+		if name == "" {
 			continue
 		}
-		if v, ok := lastStringField(before, "key"); ok {
+		p := db.Pal{NameRu: name}
+
+		p.SkillNameRu = fieldInBlock(skillBlock, "name")
+		if p.SkillNameRu == "" {
+			continue
+		}
+		p.DescriptionRu = fieldInBlock(skillBlock, "desc")
+
+		if v, ok := lastStringField(head, "key"); ok {
 			p.NameEn = v
 		}
-		if v, ok := lastNumberField(before); ok {
+		if v, ok := lastNumberField(head); ok {
 			p.PalDexNo = v
 		}
-		if v := lastTypesField(before); v != "" {
-			p.Element = v
-		}
+		p.Element = lastTypesField(head)
+
 		pals = append(pals, p)
+	}
+	if len(pals) == 0 {
+		return nil, fmt.Errorf("не найдено ни одного объекта пала")
 	}
 	return pals, nil
 }
@@ -256,20 +224,19 @@ func lastStringField(src, key string) (string, bool) {
 	return unescape(ms[len(ms)-1][1]), true
 }
 
-func lastNumberField(before string) (string, bool) {
-	ms := reIndexField.FindAllStringSubmatch(before, -1)
+func lastNumberField(head string) (string, bool) {
+	ms := reIndexField.FindAllStringSubmatch(head, -1)
 	if len(ms) == 0 {
 		return "", false
 	}
 	return ms[len(ms)-1][1], true
 }
 
-func lastTypesField(before string) string {
-	ms := reTypesField.FindAllStringSubmatch(before, -1)
+func lastTypesField(head string) string {
+	ms := reTypesField.FindAllStringSubmatch(head, -1)
 	if len(ms) == 0 {
 		return ""
 	}
-	// единственная группа захвата — индекс 1 (раньше я ошибочно брала m[2])
 	return joinQuoted(ms[len(ms)-1][1])
 }
 
