@@ -13,10 +13,12 @@ import (
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+	gdi32    = syscall.NewLazyDLL("gdi32.dll")
 
 	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 	procGlobalLock       = kernel32.NewProc("GlobalLock")
 	procGlobalUnlock     = kernel32.NewProc("GlobalUnlock")
+	procGlobalSize       = kernel32.NewProc("GlobalSize")
 
 	procRegisterClassExW = user32.NewProc("RegisterClassExW")
 	procCreateWindowExW  = user32.NewProc("CreateWindowExW")
@@ -36,16 +38,17 @@ var (
 	procEndPaint         = user32.NewProc("EndPaint")
 	procFillRect         = user32.NewProc("FillRect")
 	procDrawTextW        = user32.NewProc("DrawTextW")
-	procSetTextColor     = user32.NewProc("SetTextColor")
-	procSetBkMode        = user32.NewProc("SetBkMode")
-	procCreateSolidBrush = user32.NewProc("CreateSolidBrush")
-	procCreateFontW      = user32.NewProc("CreateFontW")
-	procDeleteObject     = user32.NewProc("DeleteObject")
-	procSelectObject     = user32.NewProc("SelectObject")
-
 	procOpenClipboard    = user32.NewProc("OpenClipboard")
 	procCloseClipboard   = user32.NewProc("CloseClipboard")
 	procGetClipboardData = user32.NewProc("GetClipboardData")
+
+	// GDI — рисование текста и примитивов
+	procCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
+	procCreateFontW      = gdi32.NewProc("CreateFontW")
+	procDeleteObject     = gdi32.NewProc("DeleteObject")
+	procSelectObject     = gdi32.NewProc("SelectObject")
+	procSetTextColor     = gdi32.NewProc("SetTextColor")
+	procSetBkMode        = gdi32.NewProc("SetBkMode")
 )
 
 const (
@@ -248,13 +251,17 @@ func readClipboard() string {
 		return ""
 	}
 	defer procGlobalUnlock.Call(hData)
-	var u []uint16
-	for i := 0; ; i++ {
-		c := *(*uint16)(unsafe.Pointer(p + uintptr(i*2)))
-		if c == 0 {
+
+	n, _, _ := procGlobalSize.Call(hData)
+	if n < 2 {
+		return ""
+	}
+	u := unsafe.Slice((*uint16)(unsafe.Pointer(p)), n/2)
+	for i, c := range u {
+		if c == 0 { // нулевой терминатор — конец строки
+			u = u[:i]
 			break
 		}
-		u = append(u, c)
 	}
 	return string(utf16.Decode(u))
 }
