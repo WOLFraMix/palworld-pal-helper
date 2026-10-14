@@ -88,28 +88,18 @@ func main() {
 					break
 				}
 			}
+			p := found[0]
 			var b strings.Builder
-			for i, p := range found {
-				if i == 2 {
-					fmt.Fprintf(&b, "… ещё %d, уточни запрос", len(found)-2)
-					break
-				}
-				b.WriteString(palLine(p))
-				b.WriteString("\n")
-				if p.SkillNameRu != "" {
-					b.WriteString("  Навык: ")
-					b.WriteString(p.SkillNameRu)
-					b.WriteString("\n")
-				}
-				if i == 0 && p.DescriptionRu != "" {
-					b.WriteString("  ")
-					b.WriteString(p.DescriptionRu)
-				}
-				if i < len(found)-1 {
-					b.WriteString("\n")
-				}
+			b.WriteString(palLine(p))
+			if p.SkillNameRu != "" {
+				b.WriteString("\n  Навык: ")
+				b.WriteString(p.SkillNameRu)
 			}
-			return strings.TrimRight(b.String(), "\n")
+			if p.DescriptionRu != "" {
+				b.WriteString("\n  ")
+				b.WriteString(p.DescriptionRu)
+			}
+			return b.String()
 		})
 		if err != nil {
 			fmt.Println("ошибка оверлея:", err)

@@ -84,7 +84,7 @@ const (
 	LWA_ALPHA          = 0x00000002
 )
 
-const winW, winH, hideAfterMs = 640, 320, 5000
+const winW, winH, hideAfterMs = 640, 200, 5000
 
 type wndclassex struct {
 	CbSize, Style                            uint32
