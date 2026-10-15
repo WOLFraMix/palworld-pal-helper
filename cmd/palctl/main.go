@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/api"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/db"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/importer"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/overlay"
@@ -105,6 +106,22 @@ func main() {
 			fmt.Println("ошибка оверлея:", err)
 		}
 
+	case "serve":
+		addr := "localhost:8080"
+		if len(os.Args) > 2 {
+			addr = os.Args[2]
+		}
+		store, err := db.Open(dbPath)
+		if err != nil {
+			fatal(err)
+		}
+		defer store.DB.Close()
+
+		err = api.Run(store, addr)
+		if err != nil {
+			fatal(err)
+		}
+
 	default:
 		usage()
 	}
@@ -116,7 +133,8 @@ func usage() {
 Команды:
   palctl import [папка]   — импорт данных в базу (по умолчанию data/)
   palctl search <запрос>  — поиск пала по имени (рус. или англ.)
-  palctl watch            — оверлей: Ctrl+Alt+Q ищет по тексту из буфера`)
+  palctl watch            — оверлей: Ctrl+Alt+Q ищет по тексту из буфера
+  palctl serve [адрес]    — Палдекс в браузере (по умолчанию localhost:8080)`)
 }
 
 func fatal(err error) {
