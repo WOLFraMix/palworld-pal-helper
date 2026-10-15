@@ -29,6 +29,9 @@ func Run(store *db.Store, dir string) error {
 	}
 	srvPass := os.Getenv("PAL_PASSWORD")
 
+	const outTTL = 10 * time.Minute
+	cleanupOut(out, outTTL) // почистить остатки от прошлого запуска
+
 	for {
 		entries, err := os.ReadDir(in)
 		if err == nil {
@@ -60,6 +63,25 @@ func Run(store *db.Store, dir string) error {
 			}
 		}
 		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// cleanupOut удаляет файлы ответов старше ttl.
+func cleanupOut(out string, ttl time.Duration) {
+	cutoff := time.Now().Add(-ttl)
+	entries, err := os.ReadDir(out)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue
+		}
+		os.Remove(filepath.Join(out, e.Name()))
 	}
 }
 
