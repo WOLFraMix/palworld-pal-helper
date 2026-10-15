@@ -165,6 +165,24 @@ func main() {
 			fatal(err)
 		}
 
+	case "online":
+		addr := os.Getenv("PAL_SERVER")
+		if addr == "" {
+			addr = "127.0.0.1:8212"
+		}
+		players, err := api.Players(addr, os.Getenv("PAL_PASSWORD"))
+		if err != nil {
+			fatal(err)
+		}
+		if len(players) == 0 {
+			fmt.Println("на сервере сейчас никого нет")
+			return
+		}
+		for _, p := range players {
+			fmt.Printf("%s — ур. %d, пинг %d мс, локация (%.0f, %.0f)\n",
+				p.Name, p.Level, int(p.Ping), p.Location.X, p.Location.Y)
+		}
+
 	default:
 		usage()
 	}
@@ -179,7 +197,8 @@ func usage() {
   palctl watch            — оверлей: Ctrl+Alt+Q ищет по тексту из буфера
   palctl serve [адрес]    — Палдекс в браузере (по умолчанию localhost:8080)
   palctl say <сообщение>  — отправить сообщение в чат сервера (PAL_SERVER, PAL_PASSWORD)
-  palctl bot [папка]      — чат-бот сервера (мост PalServer ↔ база)`)
+  palctl bot [папка]      — чат-бот сервера (мост PalServer ↔ база)
+  palctl online           — кто сейчас на сервере (PAL_SERVER, PAL_PASSWORD)`)
 }
 
 func fatal(err error) {

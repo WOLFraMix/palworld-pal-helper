@@ -64,6 +64,11 @@ func Run(store *db.Store, dir string) error {
 }
 
 func handle(store *db.Store, query string) string {
+	nq := strings.ToLower(strings.Join(strings.Fields(query), " "))
+	switch nq {
+	case "кто онлайн", "ктоонлайн", "online", "кто тут":
+		return onlineList()
+	}
 	if query == "" {
 		return "пустой запрос — напиши в чат: pal <имя>"
 	}
@@ -80,4 +85,23 @@ func handle(store *db.Store, query string) string {
 		no = "??"
 	}
 	return fmt.Sprintf("[%s] %s — %s: %s", no, p.NameRu, p.SkillNameRu, p.DescriptionRu)
+}
+
+func onlineList() string {
+	addr := os.Getenv("PAL_SERVER")
+	if addr == "" {
+		addr = "127.0.0.1:8212"
+	}
+	players, err := api.Players(addr, os.Getenv("PAL_PASSWORD"))
+	if err != nil {
+		return "не могу узнать онлайн: " + err.Error()
+	}
+	if len(players) == 0 {
+		return "на сервере сейчас никого нет"
+	}
+	var parts []string
+	for _, p := range players {
+		parts = append(parts, fmt.Sprintf("%s (ур. %d, пинг %d мс)", p.Name, p.Level, int(p.Ping)))
+	}
+	return fmt.Sprintf("На сервере %d: %s", len(players), strings.Join(parts, ", "))
 }

@@ -39,3 +39,44 @@ func Announce(addr, password, msg string) error {
 	}
 	return nil
 }
+
+// Player — запись из ответа /v1/api/players.
+type Player struct {
+	Name     string  `json:"name"`
+	UserID   string  `json:"userId"`
+	Ping     float64 `json:"ping"`
+	Level    int     `json:"level"`
+	Location struct {
+		X float64 `json:"location_x"`
+		Y float64 `json:"location_y"`
+	} `json:"-"`
+}
+
+// Players возвращает список игроков на сервере.
+func Players(addr, password string) ([]Player, error) {
+	if password == "" {
+		return nil, fmt.Errorf("не задан пароль администратора (переменная PAL_PASSWORD)")
+	}
+	req, err := http.NewRequest("GET", "http://"+addr+"/v1/api/players", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth("admin", password)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("сервер недоступен на %s: %w", addr, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("сервер ответил %s (проверь RESTAPIEnabled и пароль)", resp.Status)
+	}
+	var out struct {
+		Players []Player `json:"players"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out.Players, nil
+}
