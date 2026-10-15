@@ -2,3 +2,7 @@ data/palworld.db
 bridge/
 palctl.exe
 .vscode/
+release/
+start-bot.cmd
+palctl
+*.zip
