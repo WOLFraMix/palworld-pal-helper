@@ -44,8 +44,11 @@ CREATE TABLE IF NOT EXISTS pals (
 	skill_type_ru  TEXT,
 	description_ru TEXT
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_name_ru ON pals(name_ru);
+DROP INDEX IF EXISTS idx_pals_dex;
+DROP INDEX IF EXISTS idx_name_ru;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pal_key ON pals(paldex_no, name_en);
 CREATE INDEX IF NOT EXISTS idx_name_en ON pals(name_en);
+CREATE INDEX IF NOT EXISTS idx_name_ru_s ON pals(name_ru);
 `)
 	return err
 }
@@ -54,18 +57,18 @@ func (s *Store) Upsert(p Pal) error {
 	if strings.TrimSpace(p.NameRu) == "" {
 		return nil // без имени пала не опознаешь — пропускаем
 	}
-	_, err := s.DB.Exec(`
-INSERT INTO pals (paldex_no, name_ru, name_en, element, skill_name_ru, skill_type_ru, description_ru)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (name_ru) DO UPDATE SET
-	paldex_no      = CASE WHEN excluded.paldex_no != '' THEN excluded.paldex_no ELSE pals.paldex_no END,
-	name_en        = CASE WHEN excluded.name_en != '' THEN excluded.name_en ELSE pals.name_en END,
-	element        = CASE WHEN excluded.element != '' THEN excluded.element ELSE pals.element END,
-	skill_name_ru  = CASE WHEN excluded.skill_name_ru != '' THEN excluded.skill_name_ru ELSE pals.skill_name_ru END,
-	skill_type_ru  = CASE WHEN excluded.skill_type_ru != '' THEN excluded.skill_type_ru ELSE pals.skill_type_ru END,
-	description_ru = CASE WHEN excluded.description_ru != '' THEN excluded.description_ru ELSE pals.description_ru END`,
-		p.PalDexNo, p.NameRu, p.NameEn, p.Element,
-		p.SkillNameRu, p.SkillTypeRu, p.DescriptionRu)
+	if strings.TrimSpace(p.NameEn) == "" {
+		p.NameEn = p.NameRu // иначе пустые строки слипнутся в один конфликт
+	}
+	_, err := s.DB.Exec(`INSERT INTO pals
+		(paldex_no, name_ru, name_en, element, skill_name_ru, description_ru)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(paldex_no, name_en) DO UPDATE SET
+			name_ru = excluded.name_ru,
+			element = excluded.element,
+			skill_name_ru = excluded.skill_name_ru,
+			description_ru = excluded.description_ru`,
+		p.PalDexNo, p.NameRu, p.NameEn, p.Element, p.SkillNameRu, p.DescriptionRu)
 	return err
 }
 
@@ -106,4 +109,10 @@ func (s *Store) Count() int {
 	var n int
 	s.DB.QueryRow(`SELECT COUNT(*) FROM pals`).Scan(&n)
 	return n
+}
+
+// Clear удаляет всех палов (для полного переимпорта).
+func (s *Store) Clear() error {
+	_, err := s.DB.Exec(`DELETE FROM pals`)
+	return err
 }

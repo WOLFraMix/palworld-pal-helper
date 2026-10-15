@@ -13,7 +13,7 @@ import (
 )
 
 const dbPath = "data/palworld.db"
-const dataDir = "data"
+const dataDir = `C:\dev\pal-helper\data\raw`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -24,8 +24,17 @@ func main() {
 	switch os.Args[1] {
 	case "import":
 		dir := dataDir
-		if len(os.Args) > 2 {
-			dir = os.Args[2]
+		fresh := false
+		var rest []string
+		for _, a := range os.Args[2:] {
+			if a == "--fresh" {
+				fresh = true
+			} else {
+				rest = append(rest, a)
+			}
+		}
+		if len(rest) > 0 {
+			dir = rest[0]
 		}
 		store, err := db.Open(dbPath)
 		if err != nil {
@@ -33,6 +42,12 @@ func main() {
 		}
 		defer store.DB.Close()
 
+		if fresh {
+			if err := store.Clear(); err != nil {
+				fatal(err)
+			}
+			fmt.Println("старые данные удалены")
+		}
 		n, err := importer.ImportDir(store, dir)
 		if err != nil {
 			fatal(err)
@@ -198,7 +213,8 @@ func usage() {
   palctl serve [адрес]    — Палдекс в браузере (по умолчанию localhost:8080)
   palctl say <сообщение>  — отправить сообщение в чат сервера (PAL_SERVER, PAL_PASSWORD)
   palctl bot [папка]      — чат-бот сервера (мост PalServer ↔ база)
-  palctl online           — кто сейчас на сервере (PAL_SERVER, PAL_PASSWORD)`)
+  palctl online           — кто сейчас на сервере (PAL_SERVER, PAL_PASSWORD)
+  palctl import [--fresh] [папка] — импорт данных (--fresh: пересобрать с нуля)`)
 }
 
 func fatal(err error) {
