@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/api"
+	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/bridge"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/db"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/importer"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/overlay"
@@ -148,6 +149,22 @@ func main() {
 		}
 		fmt.Println("отправлено:", msg)
 
+	case "bot":
+		dir := `C:\dev\pal-helper\bridge`
+		if len(os.Args) > 2 {
+			dir = os.Args[2]
+		}
+		store, err := db.Open(dbPath)
+		if err != nil {
+			fatal(err)
+		}
+		defer store.DB.Close()
+
+		err = bridge.Run(store, dir)
+		if err != nil {
+			fatal(err)
+		}
+
 	default:
 		usage()
 	}
@@ -161,7 +178,8 @@ func usage() {
   palctl search <запрос>  — поиск пала по имени (рус. или англ.)
   palctl watch            — оверлей: Ctrl+Alt+Q ищет по тексту из буфера
   palctl serve [адрес]    — Палдекс в браузере (по умолчанию localhost:8080)
-  palctl say <сообщение>  — отправить сообщение в чат сервера (PAL_SERVER, PAL_PASSWORD)`)
+  palctl say <сообщение>  — отправить сообщение в чат сервера (PAL_SERVER, PAL_PASSWORD)
+  palctl bot [папка]      — чат-бот сервера (мост PalServer ↔ база)`)
 }
 
 func fatal(err error) {

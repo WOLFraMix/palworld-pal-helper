@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/api"
 	"github.com/WOLFraMix/Palworld-pal-helper-withAliceAI-.git/internal/db"
 )
 
-// Run слушает папку in/, отвечает файлами в out/.
-// Тот же путь, что в GAME_DIR/.../bridge у Lua-мода.
+// Run слушает папку in/ — запросы пишет туда Lua-мод на сервере.
+// Ответ: файл в out/ (для отладки) + сообщение в игровой чат через REST API.
 func Run(store *db.Store, dir string) error {
 	in := filepath.Join(dir, "in")
 	out := filepath.Join(dir, "out")
@@ -20,7 +21,13 @@ func Run(store *db.Store, dir string) error {
 			return err
 		}
 	}
-	fmt.Printf("мост слушает: %s\n", dir)
+	fmt.Printf("бот слушает запросы: %s\n", dir)
+
+	srvAddr := os.Getenv("PAL_SERVER")
+	if srvAddr == "" {
+		srvAddr = "127.0.0.1:8212"
+	}
+	srvPass := os.Getenv("PAL_PASSWORD")
 
 	for {
 		entries, err := os.ReadDir(in)
@@ -35,14 +42,21 @@ func Run(store *db.Store, dir string) error {
 				if err != nil {
 					continue // файл ещё дописывается, возьмём на следующем круге
 				}
-				answer := handle(store, strings.TrimSpace(string(data)))
+				q := strings.TrimSpace(string(data))
+				answer := handle(store, q)
 
-				// атомарная запись, чтобы Lua не поймал пол-файла
+				// атомарная запись ответа — для отладки
 				tmp := filepath.Join(out, name+".tmp")
 				if err := os.WriteFile(tmp, []byte(answer), 0o644); err == nil {
 					os.Rename(tmp, filepath.Join(out, name))
 				}
 				os.Remove(inPath)
+
+				// ответ в игровой чат
+				fmt.Printf("запрос: %q -> %q\n", q, answer)
+				if err := api.Announce(srvAddr, srvPass, answer); err != nil {
+					fmt.Println("в чат не ушло:", err)
+				}
 			}
 		}
 		time.Sleep(300 * time.Millisecond)

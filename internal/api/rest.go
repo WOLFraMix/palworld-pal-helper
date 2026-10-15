@@ -14,6 +14,9 @@ func Announce(addr, password, msg string) error {
 	if password == "" {
 		return fmt.Errorf("не задан пароль администратора (переменная PAL_PASSWORD)")
 	}
+	if r := []rune(msg); len(r) > 400 {
+		msg = string(r[:400]) + "…"
+	}
 	body, err := json.Marshal(map[string]string{"message": msg})
 	if err != nil {
 		return err
