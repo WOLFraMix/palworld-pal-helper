@@ -103,6 +103,12 @@ function esc(s) {
   return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
+const elRu = {
+  "Normal": "нейтральный", "Fire": "огонь", "Water": "вода",
+  "Electricity": "электричество", "Ice": "лёд", "Dragon": "дракон",
+  "Dark": "тьма", "Leaf": "трава", "Earth": "земля"
+};
+
 const elColors = {
   "нейтральный": "#9a9a9a", "огонь": "#e06a3a", "вода": "#4a90d9",
   "электричество": "#e8c93a", "лёд": "#7ec8e3", "дракон": "#8a5ad9",
@@ -110,9 +116,10 @@ const elColors = {
 };
 
 function render(p) {
-  const tags = (p.Element || "").split(", ").filter(Boolean).map(e =>
-    '<span class="tag" style="background:' + (elColors[e] || "#666") + '">' + esc(e) + "</span>"
-  ).join("");
+  const tags = (p.Element || "").split(",").map(s => s.trim()).filter(Boolean).map(e => {
+    const ru = elRu[e] || e;
+    return '<span class="tag" style="background:' + (elColors[ru] || "#666") + '">' + esc(ru) + "</span>";
+  }).join("");
   let h = '<div class="card"><h2>' + (p.PalDexNo ? "[" + esc(p.PalDexNo) + "] " : "")
        + esc(p.NameRu) + ' <span class="en">/ ' + esc(p.NameEn) + "</span></h2>"
        + '<div class="tags">' + tags + "</div>";

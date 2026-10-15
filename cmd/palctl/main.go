@@ -72,6 +72,11 @@ func main() {
 		defer store.DB.Close()
 
 		fmt.Println("Оверлей запущен: Ctrl+Alt+Q — поиск по тексту из буфера обмена, клик по панели или 5 секунд — скрыть. Ctrl+C — выход.")
+		srvAddr := os.Getenv("PAL_SERVER")
+		srvPass := os.Getenv("PAL_PASSWORD")
+		if srvAddr != "" {
+			fmt.Println("Режим чата: ответы будут уходить на сервер " + srvAddr)
+		}
 		err = overlay.Run(func(q string) string {
 			q = strings.TrimSpace(q)
 			q = strings.TrimPrefix(q, "пал ")
@@ -100,7 +105,13 @@ func main() {
 				b.WriteString("\n  ")
 				b.WriteString(p.DescriptionRu)
 			}
-			return b.String()
+			tx := b.String()
+			if srvAddr != "" {
+				if err := api.Announce(srvAddr, srvPass, tx); err != nil {
+					fmt.Println("в чат не ушло:", err)
+				}
+			}
+			return tx
 		})
 		if err != nil {
 			fmt.Println("ошибка оверлея:", err)
@@ -122,6 +133,21 @@ func main() {
 			fatal(err)
 		}
 
+	case "say":
+		msg := strings.Join(os.Args[2:], " ")
+		if msg == "" {
+			fmt.Println("использование: palctl say <сообщение>")
+			return
+		}
+		addr := os.Getenv("PAL_SERVER")
+		if addr == "" {
+			addr = "127.0.0.1:8212"
+		}
+		if err := api.Announce(addr, os.Getenv("PAL_PASSWORD"), msg); err != nil {
+			fatal(err)
+		}
+		fmt.Println("отправлено:", msg)
+
 	default:
 		usage()
 	}
@@ -134,7 +160,8 @@ func usage() {
   palctl import [папка]   — импорт данных в базу (по умолчанию data/)
   palctl search <запрос>  — поиск пала по имени (рус. или англ.)
   palctl watch            — оверлей: Ctrl+Alt+Q ищет по тексту из буфера
-  palctl serve [адрес]    — Палдекс в браузере (по умолчанию localhost:8080)`)
+  palctl serve [адрес]    — Палдекс в браузере (по умолчанию localhost:8080)
+  palctl say <сообщение>  — отправить сообщение в чат сервера (PAL_SERVER, PAL_PASSWORD)`)
 }
 
 func fatal(err error) {
